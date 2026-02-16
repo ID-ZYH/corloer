@@ -164,17 +164,11 @@ jobs:
       - name: Build rustdesk
         run: |
           # Windows: build RustDesk
-          # 这一步仍会生成 rustdesk.exe，因为我们没改 Cargo.toml
           python3 .\build.py --portable --hwcodec --flutter --vram --skip-portable-pack
-          
-          # 【新增】: 进入产物目录，将 rustdesk.exe 重命名为 BGDesk.exe
-          # 注意：请确保路径与实际生成路径一致，通常在 Release 目录下
-          mv ./flutter/build/windows/x64/runner/Release/rustdesk.exe ./flutter/build/windows/x64/runner/Release/BGDesk.exe
-          
-          # 【新增】: 为了防止后续脚本找不到 rustdesk.exe 报错（如果后续步骤依赖它），
-          # 我们可以保留一个副本，或者确保后续只打包整个文件夹。
-          # 这里我们将整个 Release 文件夹移动出来，此时里面已经是 BGDesk.exe 了
           mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+          
+          # 【新增】复制一份 BGDesk.exe 供绿色版打包，同时保留 rustdesk.exe 供 MSI 打包
+          cp ./rustdesk/rustdesk.exe ./rustdesk/BGDesk.exe
 
           # Download usbmmidd_v2.zip and extract it to ./rustdesk
           Invoke-WebRequest -Uri https://github.com/rustdesk-org/rdev/releases/download/usbmmidd_v2/usbmmidd_v2.zip -OutFile usbmmidd_v2.zip
@@ -254,10 +248,12 @@ jobs:
           sed -i '/dpiAware/d' res/manifest.xml
           pushd ./libs/portable
           pip3 install -r requirements.txt
-          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
+          # 【修改】使用 BGDesk.exe 作为输入
+          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/BGDesk.exe
           popd
           mkdir -p ./SignOutput
-          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
+          # 【修改】输出文件重命名为 BGDesk 开头
+          mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/BGDesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
 
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
@@ -286,7 +282,7 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./SignOutput/rustdesk-*.msi
-            ./SignOutput/rustdesk-*.exe
+            ./SignOutput/BGDesk-*.exe
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
   build-for-windows-sciter:
